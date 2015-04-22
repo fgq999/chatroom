@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>聊天室</title>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel='stylesheet' href='bootstrap-3.2.0-dist/css/bootstrap.min.css' />
+<link rel='stylesheet'
+	href='bootstrap-3.2.0-dist/css/bootstrap-theme.min.css' />
+</head>
+<body>
+	<div class="container">
+		<div class="row">
+			<div class="col-md-4">
+				<div class="panel panel-default">
+					<div class="panel-heading">
+						<div class="input-group input-group-sm">
+							<span class="input-group-addon">房间</span> <input id="roomName"
+								type="text" class="form-control" placeholder="创建房间"> <span
+								class="input-group-btn">
+								<button class="btn btn-default" onclick="createRoom()"
+									type="button">确认</button>
+							</span>
+						</div>
+					</div>
+					<table id="rooms" class="table">
+						<tr>
+							<th>序号</th>
+							<th>房间名</th>
+							<th>人数</th>
+							<th>房主</th>
+							<th>加入</th>
+						</tr>
+					</table>
+				</div>
+			</div>
+			<div class="col-md-5">
+				<div class="panel panel-default"
+					style="margin-left: auto; margin-right: auto;">
+					<div class="panel-heading">
+						<div id="userDiv" class="input-group input-group-sm">
+							<span id="rTxt" class="input-group-addon">聊天室[]</span> <input
+								id="username" type="text" class="form-control"
+								placeholder="请输入昵称"> <span class="input-group-btn">
+								<button id="btnNC" class="btn btn-default" onclick="setName()"
+									type="button">确认</button>
+							</span>
+						</div>
+						<div id="headDiv"
+							style="display: none; margin-left: auto; margin-right: auto;">
+							欢迎您[]--当前房间[<span id='headRoomName'></span>]
+						</div>
+					</div>
+					<div id="chat" class="panel-body"
+						style="height: 500px; overflow: auto;"></div>
+					<div class="panel-footer">
+						<div class="input-group input-group-lg">
+							<input type="text" id="sayTxt" class="form-control"> <span
+								class="input-group-btn">
+								<button class="btn btn-default" onclick="say()" type="button">发送</button>
+							</span>
+						</div>
+					</div>
+				</div>
+			</div>
+			<div class="col-md-3">
+				<div class="panel panel-default">
+					<div class="panel-heading">
+						房间成员
+					</div>
+					<table id="users" class="table">
+						<tr>
+							<th>序号</th>
+							<th>昵称</th>
+							<th>私聊</th>
+						</tr>
+					</table>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+<script type="text/javascript" src="lib/jquery-1.9.1.js"></script>
+<script type="text/javascript" src="lib/socket.io-client/socket.io.js"></script>
+<script type="text/javascript"
+	src="bootstrap-3.2.0-dist/js/bootstrap.js"></script>
+<script type="text/javascript">
+	var socket = io.connect("http://localhost:3001");
+	var currRoom = null;
+	var currUser = null;
+	var privateChat = null;
+	/* socket.on('conn',function(data){
+		writeData(data.value,data.user);
+	}); */
+	var map = {};
+	socket.on('rooms',function(data){
+		rooms(data.rooms);
+		var v = data.room==undefined?"无":data.room;
+		currRoom = v;
+		$("#headRoomName").html(currRoom);
+		if(data.value==undefined)return;
+		writeData(data.value,data.user);
+		userList(data.rooms);
+	});
+	socket.on('refRooms',function(data){
+		rooms(data.rooms);
+		userList(data.rooms);
+	});
+	socket.on('say',function(data){
+		writeData(data.value,data.user);
+	});
+	socket.on('setName',function(data){
+		if(data.type=="new"){
+			currUser = $("#username").val();
+			$("#userDiv").hide();
+			$("#headDiv").show();
+			$("#headDiv").html("欢迎您["+currUser+"]--当前房间[<span id='headRoomName'>"+currRoom+"</span>]");
+		}
+		
+		writeData(data.value,data.user);
+	});
+	socket.on('pchat',function(data){
+		writeData(data.value,data.fname);
+	});
+	//设置名称
+	function setName(){
+		var name = $("#username").val();
+		
+		socket.emit('setName',{name:name});
+		
+	}
+	function writeData(value,user){
+		var dir = "";
+		var type = "";
+		var head = "https://gravatar.com/avatar/8b13de3ced1141b167c7ccc0b78ce872?s=50";
+		if(user=="System"){
+			dir = "pull-left";
+			head = "https://gravatar.com/avatar/8b13de3ced1141b167c7ccc0b78ce871?s=50";
+			type = "alert alert-warning";
+		}else if(user==currUser){
+			dir = "pull-right";
+			type = "alert alert-info";
+		}else{
+			dir = "pull-left";
+			type = "alert alert-success";
+		}
+		var s="<div class=\"media\">"+
+		  "<a class=\""+dir+"\" href=\"#\">"+
+		    "<img class=\"media-object img-rounded\" src=\""+head+"\"  alt='"+user+"'>"+
+		  "</a>"+
+		  "<div class=\"media-body\">"+
+		    "<div class=\""+type+"\">"+value+"</div>"+
+		  "</div>"+
+		"</div>";
+		$("#chat").html(s+$("#chat").html());
+		
+	}
+	//获取所有房间
+	function rooms(data){
+		var th = "<tr><th>序号</th><th>房间名</th><th>人数</th><th>房主</th><th>加入</th></tr>";
+		$("#rooms tbody").html(th);
+		for(var i=0;i<data.length;i++){
+			var r = data[i];
+			var tr = "<tr><td>"+(i+1)+"</td><td>"+r.name+"</td><td>"+r.users.length+"</td><td>"+r.ho+"</td><td><button class=\"btn btn-default\" onclick=\"joinRoom('"+r.name+"')\" type=\"button\">Go!</button></td></tr>";
+			var tableHtml = $("#rooms tbody").html();
+	        tableHtml += tr;
+	        $("#rooms tbody").html(tableHtml);
+		}
+	}
+	//创建房间
+	function createRoom(){
+		var rname = $("#roomName").val();
+		var name = $("#username").val();
+		currUser = name;
+		//currRoom = rname;
+		if(name==""||name==null){
+			alert("请输入用户名");
+			return;
+		}
+		socket.emit('cRoom',{name:rname,ho:name,currRoom:currRoom});
+	}
+	function say(){
+		var say = $("#sayTxt").val();
+		if(currRoom==null||currRoom=="无"){
+			alert("请加入房间！");
+			return;
+		}
+		if(currUser==null){
+			alert("请输入用户名!");
+			return;
+		}
+		var pindex = say.indexOf('@');
+		if(pindex==1){
+			socket.emit('pchat',{value:say,fname:currUser});
+		}else{
+			socket.emit('say',{user:currUser,value:say,room:currRoom});	
+		}
+		$("#sayTxt").val("");
+	}
+	function joinRoom(room){
+		var name = $("#username").val();
+		if(room==currRoom){
+			alert("您已经在该房间了！")
+			return;
+		}
+		socket.emit('joinRoom',{room:room,currRoom:currRoom,user:name});
+		currRoom = room;
+		$("#headRoomName").html(room);
+	}
+	function pc(tname){
+		if(tname==currUser){
+			alert("无法私聊自己！");
+			return;
+		}
+		$("#sayTxt").val("[@"+tname+"]");
+	}
+	function userList(rooms){
+		var rs =null;
+		for(var i=0;i<rooms.length;i++){
+			if(rooms[i].name==currRoom){
+				rs = rooms[i];
+				break;
+			}
+		}
+		var th = "<tr><th>序号</th><th>昵称</th><th>私聊</th></tr>";
+		$("#users tbody").html(th);
+		if(rs==null)return;
+		for(var i=0;i<rs.users.length;i++){
+			var r = rs.users[i];
+			var tr = "<tr><td>"+(i+1)+"</td><td>"+r+"</td>"+
+						  "<td><button class=\"btn btn-default\" onclick=\"pc('"+r+"')\" >@!</button></td>"+
+					 "</tr>";
+			var tableHtml = $("#users tbody").html();
+	        tableHtml += tr;
+	        $("#users tbody").html(tableHtml);
+		}
+	}
+	
+	
+	$(window).bind('beforeunload',function(){
+		socket.emit('leaveRoom',{currRoom:currRoom,user:currUser});
+		return "确定离开页面";
+	})
+	
+</script>
+</html>
